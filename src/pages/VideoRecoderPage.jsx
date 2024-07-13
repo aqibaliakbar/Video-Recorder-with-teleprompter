@@ -9,13 +9,15 @@ const VideoRecorder = () => {
   const monologue = location.state?.monologue || "";
 
   const [speed, setSpeed] = useState(1);
-  const [isPaused, setIsPaused] = useState(false);
+  const [isPaused, setIsPaused] = useState(true);
   const [recording, setRecording] = useState(false);
   const [videoSrc, setVideoSrc] = useState(null);
   const monologueRef = useRef(null);
   const webcamRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const [capturedChunks, setCapturedChunks] = useState([]);
+  const [startTime, setStartTime] = useState(null);
+  const [currentTransform, setCurrentTransform] = useState(100);
 
   useEffect(() => {
     let animationFrameId;
@@ -23,21 +25,27 @@ const VideoRecorder = () => {
 
     const scrollText = (timestamp) => {
       if (!start) start = timestamp;
-      const progress = timestamp - start;
+      const elapsed = timestamp - start;
 
       if (!isPaused) {
-        monologueRef.current.style.transform = `translateY(-${
-          (progress / 1000) * speed
-        }px)`;
+        const newTransform = currentTransform - (elapsed / 1000) * speed;
+        monologueRef.current.style.transform = `translateY(${newTransform}%)`;
+        setCurrentTransform(newTransform);
       }
 
       animationFrameId = requestAnimationFrame(scrollText);
     };
 
-    animationFrameId = requestAnimationFrame(scrollText);
+    if (startTime === null && !isPaused) {
+      setStartTime(performance.now());
+    }
+
+    if (!isPaused) {
+      animationFrameId = requestAnimationFrame(scrollText);
+    }
 
     return () => cancelAnimationFrame(animationFrameId);
-  }, [speed, isPaused]);
+  }, [speed, isPaused, currentTransform, startTime]);
 
   const handleSpeedChange = (e) => {
     setSpeed(Number(e.target.value));
@@ -48,8 +56,10 @@ const VideoRecorder = () => {
   };
 
   const handleReset = () => {
-    monologueRef.current.style.transform = "translateY(0)";
+    monologueRef.current.style.transform = "translateY(100%)";
+    setCurrentTransform(100);
     setIsPaused(true);
+    setStartTime(null);
   };
 
   const handleStartRecording = () => {
@@ -66,16 +76,18 @@ const VideoRecorder = () => {
       }
     };
 
+    mediaRecorderRef.current.onstop = () => {
+      const blob = new Blob(capturedChunks, { type: "video/webm" });
+      const url = URL.createObjectURL(blob);
+      setVideoSrc(url);
+    };
+
     mediaRecorderRef.current.start();
   };
 
   const handleStopRecording = () => {
     mediaRecorderRef.current.stop();
     setRecording(false);
-
-    const blob = new Blob(capturedChunks, { type: "video/webm" });
-    const url = URL.createObjectURL(blob);
-    setVideoSrc(url);
   };
 
   const handleViewRecording = () => {
@@ -92,6 +104,7 @@ const VideoRecorder = () => {
           style={{
             transition: "transform 0.1s linear",
             whiteSpace: "pre-wrap",
+            transform: "translateY(100%)",
           }}
         >
           {monologue}
