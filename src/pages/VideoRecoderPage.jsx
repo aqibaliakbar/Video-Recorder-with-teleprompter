@@ -1,5 +1,4 @@
-// src/pages/VideoRecorder.js
-import React, { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import Webcam from "react-webcam";
 import { useLocation, useNavigate } from "react-router-dom";
 
@@ -18,6 +17,15 @@ const VideoRecorder = () => {
   const [capturedChunks, setCapturedChunks] = useState([]);
   const [startTime, setStartTime] = useState(null);
   const [currentTransform, setCurrentTransform] = useState(100);
+  const [isWebcamReady, setIsWebcamReady] = useState(false);
+
+  useEffect(() => {
+    if (typeof MediaRecorder === "undefined") {
+      console.error("MediaRecorder is not supported in this browser");
+    } else if (!MediaRecorder.isTypeSupported("video/webm")) {
+      console.error("video/webm is not supported in this browser");
+    }
+  }, []);
 
   useEffect(() => {
     let animationFrameId;
@@ -48,6 +56,15 @@ const VideoRecorder = () => {
     return () => cancelAnimationFrame(animationFrameId);
   }, [speed, isPaused, currentTransform, startTime]);
 
+  useEffect(() => {
+    if (capturedChunks.length > 0 && !recording) {
+      console.log("Creating video blob from captured chunks");
+      const blob = new Blob(capturedChunks, { type: "video/webm" });
+      const url = URL.createObjectURL(blob);
+      setVideoSrc(url);
+    }
+  }, [capturedChunks, recording]);
+
   const handleSpeedChange = (e) => {
     setSpeed(Number(e.target.value));
   };
@@ -64,30 +81,55 @@ const VideoRecorder = () => {
   };
 
   const handleStartRecording = () => {
+    console.log("Starting recording...");
     setRecording(true);
     setCapturedChunks([]);
     const stream = webcamRef.current.stream;
-    mediaRecorderRef.current = new MediaRecorder(stream, {
-      mimeType: "video/webm",
-    });
+    console.log("Webcam stream:", stream);
 
-    mediaRecorderRef.current.ondataavailable = (event) => {
-      if (event.data && event.data.size > 0) {
-        setCapturedChunks((prev) => [...prev, event.data]);
-      }
-    };
+    if (!stream) {
+      console.error("No webcam stream available");
+      return;
+    }
 
-    mediaRecorderRef.current.onstop = () => {
-      const blob = new Blob(capturedChunks, { type: "video/webm" });
-      const url = URL.createObjectURL(blob);
-      setVideoSrc(url);
-    };
+    try {
+      mediaRecorderRef.current = new MediaRecorder(stream, {
+        mimeType: "video/webm",
+      });
+      console.log("MediaRecorder created successfully");
 
-    mediaRecorderRef.current.start();
+      mediaRecorderRef.current.ondataavailable = (event) => {
+        console.log("Data available event:", event);
+        if (event.data && event.data.size > 0) {
+          setCapturedChunks((prev) => [...prev, event.data]);
+        }
+      };
+
+      mediaRecorderRef.current.onstop = () => {
+        console.log("MediaRecorder stopped");
+        const blob = new Blob(capturedChunks, { type: "video/webm" });
+        const url = URL.createObjectURL(blob);
+        setVideoSrc(url);
+      };
+
+      mediaRecorderRef.current.start();
+      console.log("MediaRecorder started");
+    } catch (error) {
+      console.error("Error starting MediaRecorder:", error);
+    }
   };
 
   const handleStopRecording = () => {
-    mediaRecorderRef.current.stop();
+    console.log("Stopping recording...");
+    if (
+      mediaRecorderRef.current &&
+      mediaRecorderRef.current.state === "recording"
+    ) {
+      mediaRecorderRef.current.stop();
+      console.log("MediaRecorder stopped");
+    } else {
+      console.warn("MediaRecorder is not in recording state");
+    }
     setRecording(false);
   };
 
@@ -98,10 +140,10 @@ const VideoRecorder = () => {
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-2xl mb-4">Video Recorder with Teleprompter</h1>
-      <div className="w-full max-w-md h-64 overflow-hidden border-2 border-gray-300 relative mb-4">
+      <div className="w-full h-64 overflow-hidden border-2 border-gray-300 relative mb-4">
         <div
           ref={monologueRef}
-          className="absolute bottom-0 w-full text-center bg-white text-black"
+          className="absolute bottom-0 w-full text-center text-3xl bg-white text-black"
           style={{
             transition: "transform 0.1s linear",
             whiteSpace: "pre-wrap",
@@ -114,6 +156,10 @@ const VideoRecorder = () => {
       <Webcam
         audio={true}
         ref={webcamRef}
+        onUserMedia={() => {
+          console.log("Webcam is ready");
+          setIsWebcamReady(true);
+        }}
         className="w-full max-w-md h-64 mb-4"
       />
       <div className="mt-4 flex space-x-4">
@@ -142,12 +188,16 @@ const VideoRecorder = () => {
         >
           Reset
         </button>
-        {!recording ? (
+        {!recording && isWebcamReady ? (
           <button
             onClick={handleStartRecording}
             className="bg-green-500 text-white p-2 rounded"
           >
             Start Recording
+          </button>
+        ) : !isWebcamReady ? (
+          <button disabled className="bg-gray-500 text-white p-2 rounded">
+            Waiting for webcam...
           </button>
         ) : (
           <button
