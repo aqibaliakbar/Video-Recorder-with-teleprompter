@@ -33,6 +33,7 @@ const VideoRecorder = () => {
         setCurrentTransform(newTransform);
       }
 
+      start = timestamp;
       animationFrameId = requestAnimationFrame(scrollText);
     };
 
@@ -116,14 +117,18 @@ const VideoRecorder = () => {
         className="w-full max-w-md h-64 mb-4"
       />
       <div className="mt-4 flex space-x-4">
-        <label>
+        <label className="flex items-center">
           Speed:
           <input
-            type="number"
+            type="range"
+            min="1"
+            max="200"
+            step="0.1"
             value={speed}
             onChange={handleSpeedChange}
-            className="border ml-2 p-1"
+            className="ml-2"
           />
+          <span className="ml-2">{(speed / 20).toFixed(1)}x</span>
         </label>
         <button
           onClick={handlePause}
